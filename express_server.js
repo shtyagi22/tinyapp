@@ -41,20 +41,28 @@ app.post("/urls", (req, res) => {
 
   urlDatabase[shortURL] = req.body.longURL;
 
-  res.redirect(urlDatabase[shortURL]);
+  res.redirect(`/urls/${shortURL}`);
   res.end();
 
 });
 
 app.get("/u/:id", (req, res) => {
-  const longURL = urlDatabase[shortURL];
+  const longURL = urlDatabase[req.params.id];
   res.redirect(longURL);
 });
-
 
 app.get("/urls/:id", (req, res) => {
   const templateVars = { id: req.params.id, longURL: urlDatabase[req.params.id] };
   res.render("urls_show", templateVars);
+});
+
+app.post('/urls/:id/delete', (req, res) => {
+  // extract the id of the joke
+  const { id } = req.params;
+  // delete from the db
+  delete urlDatabase[id];
+  // redirect to /jokes
+  res.redirect('/urls');
 });
 
 
