@@ -35,7 +35,6 @@ app.get("/urls/new", (req, res) => {
 
 app.post("/urls", (req, res) => {
   console.log(req.body); // Log the POST request body to the console
-  // Respond with 'Ok' (we will replace this)
 
   const shortURL = Math.random().toString(36).substring(2, 8);
 
@@ -56,12 +55,17 @@ app.get("/urls/:id", (req, res) => {
   res.render("urls_show", templateVars);
 });
 
+app.post('/urls/:id/update', (req, res) => {
+  urlDatabase[req.params.id] = req.body.longURL;
+  res.redirect("/urls");
+});
+
 app.post('/urls/:id/delete', (req, res) => {
-  // extract the id of the joke
+  // extract the id 
   const { id } = req.params;
   // delete from the db
   delete urlDatabase[id];
-  // redirect to /jokes
+  // redirect
   res.redirect('/urls');
 });
 
