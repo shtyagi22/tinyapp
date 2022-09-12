@@ -22,6 +22,20 @@ const urlDatabase = {
 };
 
 //
+const urlsForUser = function (userID) {
+  const urls = {};
+  for (const id in urlDatabase) {
+    const user = urlDatabase[id];
+    if (user.userID === userID) {
+      urls[id] = {
+        longURL: urlDatabase[id].longURL,
+        userID: userID
+      };
+    }
+  }
+  return urls;
+};
+
 const getUserByID = function (userID) {
   for (const id in urlDatabase) {
     const user = urlDatabase[id];
@@ -54,6 +68,8 @@ const getUserByEmail = function (email) {
   }
 };
 
+
+
 app.get("/", (req, res) => {
   res.send("Hello!");
 });
@@ -72,7 +88,7 @@ app.get("/urls", (req, res) => {
   }
   const user = users[req.cookies.user_id];
   const templateVars = {
-    urls: urlDatabase,
+    urls: urlsForUser(req.cookies.user_id),
     user
     // ... any other vars
   };
@@ -95,16 +111,21 @@ app.get("/urls/new", (req, res) => {
 });
 
 app.post("/urls", (req, res) => {
-  if (!req.cookies.user_id) {
-    res.send("You are not logged in! Please login/register.")
-    return;
-  }
+  // if (!req.cookies.user_id) {
+  //   res.send("You are not logged in! Please login/register.")
+  //   return;
+  // }
 
-  console.log(req.body); // Log the POST request body to the console
-
+  console.log("post urls req.body:", req.body); // Log the POST request body to the console
   const shortURL = Math.random().toString(36).substring(2, 8);
+  const urlID = {
+    longURL: req.body.longURL,
+    userID: req.cookies.user_id
+  };
 
-  urlDatabase[shortURL] = req.body.longURL;
+  urlDatabase[shortURL] = urlID;
+  console.log("post urls urlID object:", urlID);
+  console.log("urlDatabase:", urlDatabase);
 
   res.redirect(`/urls/${shortURL}`);
   res.end();
@@ -112,19 +133,29 @@ app.post("/urls", (req, res) => {
 });
 
 app.get("/u/:id", (req, res) => {
+  console.log("req.params:", req.params.id);
   if (!urlDatabase[req.params.id]) {
     res.send("Path does not exist!");
     return;
   }
-  const longURL = urlDatabase[req.params.id];
+  const longURL = urlDatabase[req.params.id].longURL;
+  //urlsForUser(req.cookies.user_id);
+
+  console.log("req.cookies.user_id:", req.cookies.user_id);
+  console.log("long URL:", longURL);
   res.redirect(longURL);
 });
 
 app.get("/urls/:id", (req, res) => {
+  if (!req.cookies.user_id) {
+    res.send("You are not logged in! Please <a href='/login'>login</a> or <a href='/register'>register</a>");
+    return;
+  }
   const user = users[req.cookies.user_id];
+  const longURL = urlDatabase[req.params.id].longURL;
   const templateVars = {
     id: req.params.id,
-    longURL: urlDatabase[req.params.id],
+    longURL,
     user
   };
   res.render("urls_show", templateVars);
@@ -133,14 +164,29 @@ app.get("/urls/:id", (req, res) => {
 
 //Edit Route
 app.post('/urls/:id/update', (req, res) => {
-  urlDatabase[req.params.id] = req.body.longURL;
-  res.redirect("/urls");
+  //checking for the user is logged in
+  if (!req.cookies.user_id) {
+    res.send("You are not logged in! Please <a href='/login'>login.</a>");
+    return;
+  }
+  //check for the URLs id 
+  if (urlDatabase[req.params.id]) {
+    urlDatabase[req.params.id]["longURL"] = req.body.longURL;
+    res.redirect("/urls");
+  } else {
+    res.send("This Id does not exists! Please check again");
+  }
+
 });
 
 //Delete Route
 app.post('/urls/:id/delete', (req, res) => {
+  if (!req.cookies.user_id) {
+    res.send("You are not logged in! Please <a href='/login'>login.</a>");
+    return;
+  }
   // extract the id 
-  const { id } = req.params;
+  const id = req.params.id;
   // delete from the db
   delete urlDatabase[id];
   // redirect
@@ -149,11 +195,16 @@ app.post('/urls/:id/delete', (req, res) => {
 
 //login Route
 app.get("/login", (req, res) => {
+  let user = req.cookies.user_id;
+  const templateVars = {
+    user: user
+  };
   if (!req.cookies.user_id) {
-    res.render("login");
+    res.render("login", templateVars);
   } else {
     res.redirect('/urls');
   }
+
 });
 
 app.post('/login', (req, res) => {
@@ -166,9 +217,9 @@ app.post('/login', (req, res) => {
   // console.log("getUserByEmail(testEmail)", getUserByEmail(testEmail));
 
   if (!getUserByEmail(testEmail)) {
-    res.send("User does not exist! Please register!");
+    res.send("User does not exist! Please <a href='/register'>register!</a>");
   } else if (getUserByEmail(testEmail) && testPassword !== user.password) {
-    res.send("Password doesn't match! Try again");
+    res.send("Password doesn't match! Please <a href='/login'>try again!</a>");
   } else {
     res.cookie("user_id", user.id);
     res.redirect("/urls");
@@ -201,11 +252,12 @@ app.post("/register", (req, res) => {
   if (getUserByEmail(newEmail)) {
     res.send("User already exist! Please try again!");
   }
-  users[user_id] = {
+  const user = {
     id: user_id,
-    newEmail,
-    newPassword
-  }
+    email: newEmail,
+    password: newPassword
+  };
+  users[user_id] = user;
 
   res.cookie("user_id", user_id);
   console.log("users database after update:", users);
