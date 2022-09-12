@@ -15,6 +15,29 @@ const urlDatabase = {
   "9sm5xK": "http://www.google.com"
 };
 
+const users = {
+  userRandomID: {
+    id: "userRandomID",
+    email: "user@example.com",
+    password: "purple-monkey-dinosaur",
+  },
+  user2RandomID: {
+    id: "user2RandomID",
+    email: "user2@example.com",
+    password: "dishwasher-funk",
+  },
+};
+
+//getUserByEmail()
+const getUserByEmail = function (email) {
+  for (const id in users) {
+    const user = users[id];
+    if (user.email === email) {
+      return user;
+    }
+  }
+};
+
 app.get("/", (req, res) => {
   res.send("Hello!");
 });
@@ -28,19 +51,21 @@ app.get("/hello", (req, res) => {
 });
 
 app.get("/urls", (req, res) => {
+  const user = users[req.cookies["user_id"]];
   const templateVars = {
     urls: urlDatabase,
-    username: req.cookies["username"]
+    user
     // ... any other vars
   };
-
+  console.log("templateVars:", templateVars)
   res.render("urls_index", templateVars);
 });
 
 app.get("/urls/new", (req, res) => {
+  const user = users[req.cookies["user_id"]];
   const templateVars = {
     urls: urlDatabase,
-    username: req.cookies["username"]
+    user
     // ... any other vars
   };
   res.render("urls_new", templateVars);
@@ -64,28 +89,23 @@ app.get("/u/:id", (req, res) => {
 });
 
 app.get("/urls/:id", (req, res) => {
+  const user = users[req.cookies["user_id"]];
   const templateVars = {
     id: req.params.id,
     longURL: urlDatabase[req.params.id],
-    username: req.cookies["username"]
+    user
   };
   res.render("urls_show", templateVars);
 });
 
-app.post('/login', (req, res) => {
-  console.log("login req.body:", req.body);
-  const testName = req.body.username;
-  res.cookie("user", testName);
-  res.redirect("/urls");
-})
 
-
-
+//Edit Route
 app.post('/urls/:id/update', (req, res) => {
   urlDatabase[req.params.id] = req.body.longURL;
   res.redirect("/urls");
 });
 
+//Delete Route
 app.post('/urls/:id/delete', (req, res) => {
   // extract the id 
   const { id } = req.params;
@@ -95,8 +115,48 @@ app.post('/urls/:id/delete', (req, res) => {
   res.redirect('/urls');
 });
 
+//login Route
+app.get("/login", (req, res) => {
+  res.render("login");
+})
+
+app.post('/login', (req, res) => {
+  console.log("login req.body:", req.body);
+  res.redirect("/urls");
+})
+
+//Register Route
+app.get("/register", (req, res) => {
+  res.render("register");
+});
+
+app.post("/register", (req, res) => {
+  const id = Math.random().toString(36).substring(2, 8);
+  console.log("register req.body:", req.body)
+
+  const newEmail = req.body.email;
+  const newPassword = req.body.password;
+  if (!newEmail || !newPassword) {
+    res.send("Error! email and password cannot be blank!");
+  }
+
+  if (getUserByEmail(newEmail)) {
+    res.send("User already exist! Please try again!");
+  }
+  const user = {
+    "id": id,
+    "email": newEmail,
+    "password": newPassword
+  }
+
+  users[id] = user;
+  res.cookie("user_id", id);
+  console.log("users databse:", users);
+  res.redirect("/urls");
+});
+
 // Logout Route
-app.post("/logout", (req, res) => {
+app.get("/logout", (req, res) => {
   res.clearCookie("user");
   res.redirect("/urls");
 });
