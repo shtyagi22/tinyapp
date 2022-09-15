@@ -4,16 +4,16 @@ const PORT = 8080; // default port 8080
 const cookieSession = require('cookie-session')
 const bcrypt = require("bcryptjs");
 
-
-
 app.set("view engine", "ejs");
+
+//Middlewares
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieSession({
   name: 'cookiemonster',
   keys: ['my secret key', 'yet another secret key']
 }));
 
-
+// In memory databases
 const urlDatabase = {
   b6UTxQ: {
     longURL: "https://www.tsn.ca",
@@ -23,21 +23,6 @@ const urlDatabase = {
     longURL: "https://www.google.ca",
     userID: "aJ48lW",
   },
-};
-
-//
-const urlsForUser = function (userID) {
-  const urls = {};
-  for (const id in urlDatabase) {
-    const user = urlDatabase[id];
-    if (user.userID === userID) {
-      urls[id] = {
-        longURL: urlDatabase[id].longURL,
-        userID: userID
-      };
-    }
-  }
-  return urls;
 };
 
 const users = {
@@ -52,6 +37,23 @@ const users = {
     password: "dishwasher-funk",
   },
 };
+
+
+//helper functions
+const urlsForUser = function (userID) {
+  const urls = {};
+  for (const id in urlDatabase) {
+    const user = urlDatabase[id];
+    if (user.userID === userID) {
+      urls[id] = {
+        longURL: urlDatabase[id].longURL,
+        userID: userID
+      };
+    }
+  }
+  return urls;
+
+};
 const getUserByEmail = function (email) {
   for (const id in users) {
     const user = users[id];
@@ -62,8 +64,16 @@ const getUserByEmail = function (email) {
 };
 
 
+//Routes
+
 app.get("/", (req, res) => {
-  res.send("Hello!");
+  if (!req.session.user_id) {
+    res.redirect("/login");
+  }
+  else {
+    res.redirect("/urls");
+  }
+
 });
 
 app.get("/urls.json", (req, res) => {
@@ -78,14 +88,15 @@ app.get("/urls", (req, res) => {
   if (!req.session.user_id) {
     res.send("You are not logged in! Please <a href='/login'>login</a> or <a href='/register'>register</a>")
   }
+
   const user = users[req.session.user_id];
   const templateVars = {
     urls: urlsForUser(req.session.user_id),
     user
-    // ... any other vars
   };
-  console.log("templateVars:", templateVars)
+
   res.render("urls_index", templateVars);
+
 });
 
 app.get("/urls/new", (req, res) => {
@@ -97,18 +108,12 @@ app.get("/urls/new", (req, res) => {
   const templateVars = {
     urls: urlDatabase,
     user
-    // ... any other vars
   };
   res.render("urls_new", templateVars);
 });
 
 app.post("/urls", (req, res) => {
-  // if (!req.session.user_id) {
-  //   res.send("You are not logged in! Please login/register.")
-  //   return;
-  // }
 
-  console.log("post urls req.body:", req.body); // Log the POST request body to the console
   const shortURL = Math.random().toString(36).substring(2, 8);
   const urlID = {
     longURL: req.body.longURL,
@@ -116,9 +121,6 @@ app.post("/urls", (req, res) => {
   };
 
   urlDatabase[shortURL] = urlID;
-  console.log("post urls urlID object:", urlID);
-  console.log("urlDatabase:", urlDatabase);
-
   res.redirect(`/urls/${shortURL}`);
   res.end();
 
@@ -126,16 +128,15 @@ app.post("/urls", (req, res) => {
 
 app.get("/u/:id", (req, res) => {
   console.log("req.params:", req.params.id);
+
   if (!urlDatabase[req.params.id]) {
     res.send("Path does not exist!");
     return;
   }
-  const longURL = urlDatabase[req.params.id].longURL;
-  //urlsForUser(req.session.user_id);
 
-  console.log("req.session.user_id:", req.session.user_id);
-  console.log("long URL:", longURL);
+  const longURL = urlDatabase[req.params.id].longURL;
   res.redirect(longURL);
+
 });
 
 app.get("/urls/:id", (req, res) => {
@@ -143,19 +144,33 @@ app.get("/urls/:id", (req, res) => {
     res.send("You are not logged in! Please <a href='/login'>login</a> or <a href='/register'>register</a>");
     return;
   }
+
   const user = users[req.session.user_id];
-  const longURL = urlDatabase[req.params.id].longURL;
+  const urlObj = urlDatabase[req.params.id];
+  if (!urlObj) {
+    res.send("Path does not exist!");
+    return;
+  }
+
+  const longURL = urlObj.longURL;
   const templateVars = {
     id: req.params.id,
     longURL,
     user
   };
+
+  if (req.session.user_id !== urlDatabase[req.params.id].userID) {
+    res.send("Requested URL doesn't belong to the logged in user!");
+    return;
+  }
   res.render("urls_show", templateVars);
+
 });
 
 
 //Edit Route
 app.post('/urls/:id/update', (req, res) => {
+
   //checking for the user is logged in
   if (!req.session.user_id) {
     res.send("You are not logged in! Please <a href='/login'>login.</a>");
@@ -200,13 +215,10 @@ app.get("/login", (req, res) => {
 });
 
 app.post('/login', (req, res) => {
-  console.log("login req.body:", req.body);
 
   const testEmail = req.body.email;
   const testPassword = req.body.password;
   const user = getUserByEmail(testEmail);
-  // console.log("users databse in login:", users);
-  // console.log("getUserByEmail(testEmail)", getUserByEmail(testEmail));
 
   if (!getUserByEmail(testEmail)) {
     return res.status(401).send("User does not exist! Please <a href='/register'>register!</a>");
@@ -215,7 +227,7 @@ app.post('/login', (req, res) => {
   if (!bcrypt.compareSync(testPassword, user.password)) {
     return res.status(401).send("Password doesn't match! Please <a href='/login'>try again!</a>");
   }
-  //res.cookie("user_id", user.id);
+
   req.session.user_id = user.id;
 
   res.redirect("/urls");
@@ -236,7 +248,6 @@ app.get("/register", (req, res) => {
 app.post("/register", (req, res) => {
 
   const user_id = Math.random().toString(36).substring(2, 8);
-  console.log("register req.body:", req.body);
 
   const newEmail = req.body.email;
   const newPassword = req.body.password;
@@ -247,7 +258,7 @@ app.post("/register", (req, res) => {
   }
 
   if (getUserByEmail(newEmail)) {
-    return res.status(401).send("User already exist! Please try again!");
+    return res.status(401).send("User already exist! Please <a href='/login'>login!</a> !");
   }
   const user = {
     id: user_id,
@@ -256,11 +267,9 @@ app.post("/register", (req, res) => {
   };
   users[user_id] = user;
 
-  //res.cookie("user_id", user_id);
   req.session.user_id = user_id;
-
-  console.log("users database after update:", users);
   res.redirect("/urls");
+
 });
 
 // Logout Route
